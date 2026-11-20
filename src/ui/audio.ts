@@ -79,7 +79,18 @@ export function play(sfx: SfxEvent): void {
         tone(520, 0.02, 0.22)
         break
       case 'deal':
-        for (let i = 0; i < 5; i++) clack(i * 0.07, 0.3)
+        clack(0, 0.28)
+        clack(0.05, 0.22)
+        break
+      case 'shuffle':
+        // the wall being pushed together: a run of soft clacks
+        for (let i = 0; i < 14; i++) clack(i * 0.055 + Math.random() * 0.02, 0.16 + Math.random() * 0.12)
+        break
+      case 'dice':
+        // two dice rattling, then coming to rest
+        for (let i = 0; i < 9; i++) tone(900 + Math.random() * 700, i * 0.09 + Math.random() * 0.03, 0.03, 0.07, 'square')
+        clack(0.95, 0.35)
+        clack(1.05, 0.3)
         break
       case 'win':
         ;[523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.11, 0.3, 0.18))

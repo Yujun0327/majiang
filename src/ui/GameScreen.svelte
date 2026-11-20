@@ -3,8 +3,12 @@
   import { fade, fly } from 'svelte/transition'
   import type { OnlineSession } from '../app/session.svelte'
   import { kindName, sameMove, waits, type Kind, type Move, type Seat } from '../engine'
+  import { DRAW_DELAY_MS } from '../app/timing'
   import { isMuted, play, setMuted, unlock } from './audio'
-  import { dur, settle } from './motion'
+  import { DealIntro } from './intro.svelte'
+  import { dur, flyFrom, settle } from './motion'
+  import { places, stackRect } from './places'
+  import { drawnOf, openingOf, stackOfLast } from './wall'
   import PayoutLine from './PayoutLine.svelte'
   import Table from './Table.svelte'
   import Tile from './Tile.svelte'
@@ -30,6 +34,21 @@
     tick = untrack(() => tick) + 1
   })
 
+  // the start-of-hand sequence: wall, dice, deal — runs while the session holds the freshly dealt state
+  const intro = new DealIntro()
+  $effect(() => {
+    if (!session.dealing) return
+    untrack(() =>
+      intro.start((stage, grab) => {
+        if (stage === 'build') play('shuffle')
+        else if (stage === 'dice') play('dice')
+        else if (grab % 2 === 1) play('deal')
+      }),
+    )
+    return () => intro.stop()
+  })
+  const open = $derived(openingOf(gs))
+
   const moves = $derived(session.myMoves())
   const canDiscard = $derived(new Set(moves.filter((m) => m.type === 'discard').map((m) => (m as { kind: Kind }).kind)))
   const calls = $derived(moves.filter((m) => m.type === 'hu' || m.type === 'gang' || m.type === 'peng' || m.type === 'chi' || m.type === 'pass'))
@@ -50,6 +69,7 @@
 
   /** My concealed tiles, the freshly drawn one set apart on the right. */
   const myHand = $derived.by(() => {
+    if (intro.active) return { tiles: gs.hands[me].slice(0, intro.dealt(me, gs.dealer)), drawn: null as Kind | null }
     const tiles = [...gs.hands[me]]
     const mine = gs.toAct === me && gs.phase === 'turn' && gs.drawn !== null && gs.drawn >= 0
     if (!mine) return { tiles, drawn: null as Kind | null }
@@ -94,11 +114,20 @@
   }
 
   /** First tap lifts a tile, the second throws it. `slot` is its place in the row (drawn tile = -1). */
-  function tap(slot: number, kind: Kind) {
+  function tap(slot: number, kind: Kind, el: Element) {
     unlock()
     if (!canDiscard.has(kind)) return
-    if (picked === slot) submit({ type: 'discard', kind })
-    else picked = slot
+    if (picked === slot) {
+      places.tap = el.getBoundingClientRect() // the throw starts from here
+      submit({ type: 'discard', kind })
+    } else picked = slot
+  }
+
+  /** A tile arriving in my hand from the wall: a dealt batch, or my draw for the turn. */
+  function fromWall(node: Element, { draw }: { draw: boolean }) {
+    if (!draw && !intro.active) return { duration: 0 }
+    const drawn = intro.drawn(gs.dealer) ?? drawnOf(gs)
+    return flyFrom(node, { from: stackRect(stackOfLast(drawn)), spin: 0, delay: draw ? DRAW_DELAY_MS : 0, duration: draw ? 560 : 360 })
   }
 
   let lastSfx = -1
@@ -126,6 +155,9 @@
   const status = $derived.by(() => {
     if (session.status === 'desync') return 'Out of sync with the table — waiting for a repair…'
     if (session.absentSeat !== null && !takeover) return `${names[session.absentSeat]} is away, waiting for them to reconnect…`
+    if (intro.stage === 'build') return 'Building the wall: 136 tiles, stacked two high on four sides'
+    if (intro.stage === 'dice') return `${who(gs.dealer)} (dealer) roll${seated && gs.dealer === me ? '' : 's'} the dice to choose where the wall opens`
+    if (intro.stage === 'deal') return `Rolled ${open.total}: the wall opens on ${who(open.side) === 'You' ? 'your' : names[open.side] + "'s"} side — dealing 4, 4, 4, then 1`
     if (session.busy) return 'The others are playing…'
     if (gs.phase === 'claim' && gs.pending) {
       if (calls.length) return `${who(gs.pending.from)} threw ${kindName(gs.pending.kind)} — do you want it?`
@@ -165,7 +197,7 @@
     <button class="chip" onclick={onExit}>Leave</button>
   </header>
 
-  <Table {gs} {me} {seated} {tick} />
+  <Table {gs} {me} {seated} {tick} {intro} />
 
   <section class="mine">
     {#if ready.length}
@@ -176,6 +208,10 @@
     {/if}
 
     <p class="status" class:mine-turn={calls.length > 0 || (seated && gs.toAct === me && gs.phase === 'turn' && !session.busy)}>{status}</p>
+
+    {#if session.dealing}
+      <div class="actions"><button class="chip" onclick={() => session.skipDeal()}>Skip the deal</button></div>
+    {/if}
 
     {#if takeover}
       <div class="actions">
@@ -204,13 +240,14 @@
     {#if seated}
       <div class="hand">
         {#each myHand.tiles as k, i (i)}
-          <button class="slot" class:up={picked === i} class:hint={hinted.has(k)} class:dead={!canDiscard.has(k)} onclick={() => tap(i, k)} aria-label={kindName(k)}>
+          <button class="slot" class:up={picked === i} class:hint={hinted.has(k)} class:dead={!canDiscard.has(k)} onclick={(e) => tap(i, k, e.currentTarget)} aria-label={kindName(k)} in:fromWall={{ draw: false }}>
             <Tile kind={k} />
           </button>
         {/each}
         {#if myHand.drawn !== null}
-          <button class="slot drawn" class:up={picked === -1} class:dead={!canDiscard.has(myHand.drawn)} onclick={() => tap(-1, myHand.drawn!)} aria-label={kindName(myHand.drawn)} in:fly={{ y: -34, duration: dur(280), easing: settle }}>
-            <Tile kind={myHand.drawn} />
+          <button class="slot drawn" class:up={picked === -1} class:dead={!canDiscard.has(myHand.drawn)} onclick={(e) => tap(-1, myHand.drawn!, e.currentTarget)} aria-label="{kindName(myHand.drawn)}, just drawn" in:fromWall={{ draw: true }}>
+            <span class="new">NEW</span>
+            <Tile kind={myHand.drawn} lit />
           </button>
         {/if}
       </div>
@@ -274,7 +311,10 @@
   .slot.hint { transform: translateY(calc(var(--tw) * -0.18)); filter: drop-shadow(0 0 6px var(--brass-hi)); }
   .slot.up { transform: translateY(calc(var(--tw) * -0.32)); }
   .slot.dead { cursor: default; }
-  .slot.drawn { margin-left: calc(var(--tw) * 0.35); }
+  .slot { position: relative; }
+  .slot.drawn { margin-left: calc(var(--tw) * 0.4); filter: drop-shadow(0 0 7px var(--brass-hi)); }
+  .new { position: absolute; left: 50%; bottom: calc(100% + 3px); transform: translateX(-50%); background: var(--brass-hi); color: var(--felt-deep); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; line-height: 1; padding: 3px 5px; border-radius: 4px; pointer-events: none; }
+  .mine .chip { align-self: center; }
 
   .overlay { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgb(0 0 0 / 0.55); padding: var(--sp-3); }
   .card { width: min(96vw, 520px); padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-3); max-height: 92dvh; overflow-y: auto; }

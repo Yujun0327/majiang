@@ -35,6 +35,69 @@ export function toss(node: Element, { dy = 0.26, big = 1.9, tilt = -14, duration
   }
 }
 
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+
+export interface Flight {
+  /** Where the tile starts, as a screen rectangle; null = no flight. */
+  from: DOMRect | null
+  /** A stop on the way (a claimed tile visits the caller's hand before the set is laid down). */
+  via?: DOMRect | null
+  /** Rotation of the layer the node lives in, so screen offsets can be turned into its own axes. */
+  rot?: number
+  delay?: number
+  duration?: number
+  /** Fraction of the duration to stay at `from` before moving (companion tiles waiting in the hand). */
+  wait?: number
+  spin?: number
+}
+
+/**
+ * A tile travelling from somewhere else on screen into the place it now
+ * occupies. The node itself is animated (no overlay): it starts displaced to
+ * `from`, scaled to that spot's size, and arcs home with a little spin.
+ */
+export function flyFrom(node: Element, { from, via = null, rot = 0, delay = 0, duration, wait = 0, spin = 14 }: Flight) {
+  if (!from || !motionOk() || (from.width === 0 && from.height === 0)) return { duration: 0 }
+  const to = node.getBoundingClientRect()
+  if (to.width === 0 && to.height === 0) return { duration: 0 }
+  const a = (rot * Math.PI) / 180
+  const cos = Math.cos(a)
+  const sin = Math.sin(a)
+  const size = (r: DOMRect) => Math.max(r.width, r.height)
+  /** Offset and scale of a screen rectangle, in the node's own (possibly rotated) axes. */
+  const place = (r: DOMRect) => {
+    const dx = r.left + r.width / 2 - (to.left + to.width / 2)
+    const dy = r.top + r.height / 2 - (to.top + to.height / 2)
+    return { x: dx * cos + dy * sin, y: -dx * sin + dy * cos, s: clamp(size(r) / size(to), 0.45, 3) }
+  }
+  const A = place(from)
+  const B = via ? place(via) : null
+  const HOME = { x: 0, y: 0, s: 1 }
+  const mix = (p: typeof A, q: typeof A, e: number) => ({ x: p.x + (q.x - p.x) * e, y: p.y + (q.y - p.y) * e, s: p.s + (q.s - p.s) * e })
+  return {
+    delay,
+    duration: duration ?? (B || wait ? 1050 : 520),
+    css: (t: number) => {
+      let at = A
+      let e = 0
+      if (B) {
+        // from → the hand, a pause there, then down into place
+        if (t < 0.38) at = mix(A, B, settle(t / 0.38))
+        else if (t < 0.56) at = B
+        else {
+          e = settle((t - 0.56) / 0.44)
+          at = mix(B, HOME, e)
+        }
+      } else {
+        e = t <= wait ? 0 : settle((t - wait) / (1 - wait))
+        at = mix(A, HOME, e)
+      }
+      const hop = Math.sin(Math.PI * e) * 0.32 // rises off the table mid-flight
+      return `transform: translate(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px) scale(${(at.s + hop).toFixed(3)}) rotate(${((1 - e) * spin * (e > 0 ? 1 : 0)).toFixed(1)}deg); position: relative; z-index: 9;`
+    },
+  }
+}
+
 /** A tile picked up off the board: it swells and fades. */
 export function lift(_node: Element, { duration = 260 } = {}) {
   return {

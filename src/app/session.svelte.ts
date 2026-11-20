@@ -1,16 +1,17 @@
-import { applySteps, createGame, legalMoves, publicHash, redact, sameMove, defaultConfig, SEATS } from '../engine'
+import { applySteps, createGame, createSteps, legalMoves, publicHash, redact, sameMove, defaultConfig, SEATS } from '../engine'
 import type { GameConfig, GameState, Move, Seat } from '../engine'
 import { BeaconSession, brokersFromEnv, type Beacon, type GameAdapter, type Transport } from '@yujun/game-net'
 import { MONEY_RULES, WalletSession, defaultLedger, loadIdentity, type Identity, type Ledger, type LockState, type Payout } from '@yujun/game-net/wallet'
 import { APP } from './persist'
+import { CALL_MS, DEAL_MS, STEP_MS } from './timing'
 
-export type SfxEvent = 'tile' | 'claim' | 'gang' | 'win' | 'lose' | 'draw' | 'deal'
+export type SfxEvent = 'tile' | 'claim' | 'gang' | 'win' | 'lose' | 'draw' | 'deal' | 'dice' | 'shuffle'
 
 export const RULES_VERSION = '1'
 /** Hands per session the host may pick. */
 export const HAND_CHOICES = [4, 8, 16]
-/** Bot moves are revealed one at a time, this far apart. */
-const STEP_MS = 750
+/** A freshly dealt hand (set only by the deal itself): the table plays its wall-dice-deal sequence on it. */
+const isDeal = (s: GameState): boolean => s.last?.type === 'draw'
 
 const TABLE = (MONEY_RULES as Record<string, { table?: { buyIns: number[]; pointValues?: number[]; capPoints?: number } } | undefined>)[APP]?.table
 /** Cash per point on offer; empty until the ledger knows this game (free play only). */
@@ -120,6 +121,8 @@ export class OnlineSession {
   /** What the table shows: lags `state` while bot moves are revealed one by one. */
   shown = $state.raw<GameState>() as GameState
   events = $state<{ id: number; sfx: SfxEvent }[]>([])
+  /** True while the table is showing the start-of-hand sequence; input waits. */
+  dealing = $state(false)
   balances = $state<Record<string, number>>({})
   readonly room: string
   readonly myKey: string
@@ -177,9 +180,10 @@ export class OnlineSession {
     if (core.snapshot && core.snapshot.gameId !== this.gameId) {
       this.gameId = core.snapshot.gameId
       this.seenLog = 0
-      this.prev = createGame(core.snapshot.cfg)
-      this.reveal([this.prev], true)
-      this.emit('deal')
+      // the deal first, then whatever the bots did before the first human decision
+      const opening = createSteps(core.snapshot.cfg)
+      this.prev = opening[opening.length - 1]
+      this.reveal(opening, 'restart')
     }
     this.state = core.state
     const fresh = log.length - this.seenLog
@@ -191,9 +195,9 @@ export class OnlineSession {
         steps.push(...part)
         st = part[part.length - 1]
       }
-      this.reveal(steps, false)
+      this.reveal(steps, 'append')
     } else if (fresh !== 0) {
-      this.reveal([core.state], true) // a bulk catch-up: jump straight to now
+      this.reveal([core.state], 'jump') // a bulk catch-up: jump straight to now
     }
     this.seenLog = log.length
     this.prev = core.state
@@ -208,27 +212,50 @@ export class OnlineSession {
     this.rev++
   }
 
-  /** Queue states for the table; passes are skipped, the first state shows at once. */
-  private reveal(steps: GameState[], reset: boolean): void {
-    if (reset) {
+  /**
+   * Queue states for the table; passes are skipped, the first state shows at
+   * once. 'restart' drops what was queued (a new game), 'jump' also shows the
+   * result immediately with no pacing (a bulk catch-up).
+   */
+  private reveal(steps: GameState[], mode: 'append' | 'restart' | 'jump'): void {
+    if (mode !== 'append') {
       if (this.timer) clearTimeout(this.timer)
       this.timer = null
       this.queue = []
+      this.dealing = false
     }
     const last = steps[steps.length - 1]
     this.queue.push(...steps.filter((s) => s === last || s.last?.type !== 'pass'))
-    if (!this.stagger || reset) {
+    if (!this.stagger || mode === 'jump') {
       while (this.queue.length) this.show(this.queue.shift()!)
       this.pending = 0
-    } else if (!this.timer) this.drain()
+    } else {
+      this.pending = this.queue.length
+      if (!this.timer) this.drain()
+    }
   }
 
   private drain(): void {
     this.timer = null
+    this.dealing = false
     const next = this.queue.shift()
     if (next) this.show(next)
     this.pending = this.queue.length
-    if (this.queue.length) this.timer = setTimeout(() => this.drain(), STEP_MS)
+    if (next && isDeal(next)) {
+      // hold the dealt state while the table builds the wall, rolls and deals
+      this.dealing = true
+      this.timer = setTimeout(() => this.drain(), DEAL_MS)
+    } else if (this.queue.length) {
+      const call = next?.last?.type === 'chi' || next?.last?.type === 'peng' || next?.last?.type === 'gang'
+      this.timer = setTimeout(() => this.drain(), call ? CALL_MS : STEP_MS)
+    }
+  }
+
+  /** Cut the start-of-hand sequence short. */
+  skipDeal(): void {
+    if (!this.dealing) return
+    if (this.timer) clearTimeout(this.timer)
+    this.drain()
   }
 
   private show(next: GameState): void {
@@ -265,7 +292,7 @@ export class OnlineSession {
 
   /** True while bot moves are still being revealed; input waits. */
   get busy(): boolean {
-    return this.pending > 0
+    return this.pending > 0 || this.dealing
   }
 
   myMoves(): Move[] {
