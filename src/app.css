@@ -7,6 +7,7 @@
 @import '@fontsource/source-serif-4/600.css';
 @import '@fontsource/ibm-plex-sans/500.css';
 @import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ma-shan-zheng/400.css';
 
 :root {
   --felt: #0f3d33;
@@ -30,6 +31,10 @@
 
   --cjk: 'Songti SC', 'STSong', 'Noto Serif CJK SC', 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'PMingLiU';
   --font-display: 'Fraunces', var(--cjk), Georgia, serif;
+  /* the brush hand of the portal's 麻将 card: titles, calls, the numbers on the table */
+  --font-brush: 'Ma Shan Zheng', 'Fraunces', var(--cjk), Georgia, serif;
+  --room: #150d09;
+  --lattice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='84' height='84'%3E%3Cg fill='none' stroke='%23d9b25a' stroke-opacity='0.05' stroke-width='1.6'%3E%3Cpath d='M0 42h21v-21h42v42h-42v-21M42 0v21M42 63v21M63 42h21'/%3E%3Crect x='32' y='32' width='20' height='20'/%3E%3C/g%3E%3C/svg%3E");
   --font-body: 'Source Serif 4', var(--cjk), Georgia, serif;
   --font-ui: 'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', sans-serif;
 
@@ -59,7 +64,7 @@
 html, body { margin: 0; padding: 0; height: 100%; }
 
 body {
-  background: var(--felt);
+  background: var(--room);
   color: var(--on-felt);
   font-family: var(--font-ui);
   font-size: var(--fs-sm);
@@ -70,21 +75,23 @@ body {
 
 #app { min-height: 100dvh; position: relative; isolation: isolate; }
 
-/* the lamp over the table: a warm pool, a deep vignette, the nap of the baize */
+/* a rosewood room at night: lamplight from above, a carved lattice screen in the dark, the grain of the wood */
 #app::before {
   content: '';
   position: fixed;
   inset: 0;
   background-image:
-    radial-gradient(ellipse 70% 48% at 50% 30%, rgb(255 214 140 / 0.13), transparent 70%),
-    radial-gradient(ellipse 120% 100% at 50% 55%, transparent 45%, rgb(0 0 0 / 0.55) 100%),
+    radial-gradient(ellipse 75% 55% at 50% 32%, rgb(255 196 120 / 0.2), transparent 70%),
+    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 40%, rgb(0 0 0 / 0.7) 100%),
+    var(--lattice),
+    linear-gradient(180deg, #2a1810 0%, #1a0f0a 55%, #120a07 100%),
     var(--grain);
-  background-size: auto, auto, 160px 160px;
+  background-size: auto, auto, 84px 84px, auto, 160px 160px;
   pointer-events: none;
   z-index: -1;
 }
 
-h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+h1, h2, h3 { font-family: var(--font-brush); font-weight: 400; letter-spacing: 0.01em; margin: 0; }
 button { font: inherit; cursor: pointer; }
 .tabular { font-variant-numeric: tabular-nums; }
 .label { font-family: var(--font-ui); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--smoke); }

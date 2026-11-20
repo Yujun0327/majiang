@@ -239,7 +239,7 @@
     {/if}
 
     {#if seated}
-      <div class="hand">
+      <div class="hand" class:bare={myHand.tiles.length === 0}>
         {#each myHand.tiles as k, i (i)}
           <button class="slot" class:up={picked === i} class:hint={hinted.has(k)} class:dead={!canDiscard.has(k)} onclick={(e) => tap(i, k, e.currentTarget)} aria-label={kindName(k)} in:fromWall={{ draw: false }}>
             <Tile kind={k} />
@@ -296,8 +296,9 @@
 <style>
   .screen { min-height: 100dvh; display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) 4px max(var(--sp-2), env(safe-area-inset-bottom)); max-width: 980px; margin: 0 auto; }
   .bar { display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-2); min-height: 32px; }
+  .bar .label { font-family: var(--font-brush); font-size: 1.15rem; letter-spacing: 0.06em; text-transform: none; color: var(--brass-hi); }
   .grow { flex: 1; }
-  .chip { background: transparent; border: 1px solid rgb(243 236 218 / 0.3); color: var(--on-felt); border-radius: 999px; padding: 4px 12px; font-size: var(--fs-xs); min-height: 30px; }
+  .chip { background: rgb(0 0 0 / 0.25); border: 1px solid rgb(236 208 126 / 0.45); color: var(--on-felt); border-radius: 999px; padding: 4px 12px; font-size: var(--fs-xs); min-height: 30px; }
 
   .mine { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--sp-2); min-height: 9.5rem; }
   .status { margin: 0; text-align: center; color: var(--smoke); font-size: var(--fs-sm); min-height: 1.45em; }
@@ -305,9 +306,11 @@
   .ready { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--on-felt); background: rgb(0 0 0 / 0.25); border: 1px solid rgb(236 208 126 / 0.45); border-radius: 999px; padding: 4px 12px; align-self: center; }
   .run { display: flex; gap: 1px; --tw: 20px; }
   .actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; justify-content: center; align-items: center; }
-  .call-btn { display: flex; align-items: center; gap: 8px; font-size: var(--fs-md); padding: 8px 16px; }
+  .call-btn { display: flex; align-items: center; gap: 8px; font-family: var(--font-brush); font-weight: 400; font-size: 1.5rem; line-height: 1.1; padding: 6px 16px 8px; border-color: var(--brass-lo); }
 
-  .hand { --tw: clamp(22px, calc((100vw - 30px) / 14.4), 56px); display: flex; justify-content: center; align-items: flex-end; gap: 1px; padding-top: calc(var(--tw) * 0.38); }
+  .hand { --tw: clamp(22px, calc((100vw - 30px) / 14.4), 56px); display: flex; justify-content: center; align-items: flex-end; gap: 1px; padding: calc(var(--tw) * 0.38) calc(var(--tw) * 0.3) 0; width: fit-content; max-width: 100%; margin: 0 auto; min-height: calc(var(--tw) * 1.75);
+    /* a rosewood rack under my tiles, with a brass edge */
+    border-bottom: calc(var(--tw) * 0.24) solid #4a2618; border-radius: 0 0 6px 6px; box-shadow: 0 1px 0 #c79a3a, 0 calc(var(--tw) * 0.1) 0 #2a140c, 0 calc(var(--tw) * 0.3) 14px rgb(0 0 0 / 0.55); }
   .slot { background: none; border: none; padding: 0; transition: transform 110ms ease, filter 110ms ease; }
   .slot.hint { transform: translateY(calc(var(--tw) * -0.18)); filter: drop-shadow(0 0 6px var(--brass-hi)); }
   .slot.up { transform: translateY(calc(var(--tw) * -0.32)); }
@@ -319,7 +322,10 @@
 
   .overlay { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgb(0 0 0 / 0.55); padding: var(--sp-3); }
   .card { width: min(96vw, 520px); padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-3); max-height: 92dvh; overflow-y: auto; }
-  .card h2 { font-size: var(--fs-xl); line-height: 1.2; color: var(--ink); }
+  .hand.bare { border-color: transparent; box-shadow: none; }
+  .card h2 { font-size: var(--fs-xl); line-height: 1.15; color: #7a1712; padding-right: 3rem; }
+  /* a vermilion seal in the corner of the result sheet */
+  .card::before { content: '麻'; position: absolute; top: 14px; right: 16px; width: 2.6rem; height: 2.6rem; display: grid; place-items: center; font-family: var(--font-brush); font-size: 1.9rem; line-height: 1; color: #f6e6c8; background: #b3261e; border-radius: 6px; box-shadow: inset 0 0 0 2px #b3261e, inset 0 0 0 3px rgb(246 230 200 / 0.7); transform: rotate(6deg); opacity: 0.9; }
   .reveal { --tw: clamp(16px, 5vw, 26px); display: flex; flex-wrap: wrap; gap: 4px 8px; }
   .meld { display: flex; gap: 1px; }
   .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
