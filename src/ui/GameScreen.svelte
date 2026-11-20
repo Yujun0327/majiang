@@ -18,10 +18,10 @@
   const gs = $derived(session.view)
   const seated = $derived(session.mySeat !== null)
   const me = $derived(session.mySeat ?? 0)
-  /** Across the top, left to right: 上家, 对家, 下家. */
-  const opponents = $derived([3, 2, 1].map((d) => ({ seat: (me + d) % SEATS, rel: ['', '下家', '对家', '上家'][d] })))
+  /** Across the top, left to right: the player before me, across, and after me. */
+  const opponents = $derived([3, 2, 1].map((d) => ({ seat: (me + d) % SEATS, rel: ['', 'plays after you', 'across', 'plays before you'][d] })))
   const names = $derived(gs.config.names)
-  const who = (seat: Seat) => (seated && seat === me ? '你' : names[seat])
+  const who = (seat: Seat) => (seated && seat === me ? 'You' : names[seat])
 
   const moves = $derived(session.myMoves())
   const canDiscard = $derived(new Set(moves.filter((m) => m.type === 'discard').map((m) => (m as { kind: Kind }).kind)))
@@ -85,12 +85,12 @@
   const status = $derived.by(() => {
     if (session.busy) return ''
     if (gs.phase === 'claim' && gs.pending) {
-      if (calls.length) return `${who(gs.pending.from)}打出 ${kindName(gs.pending.kind)} — 要吗？`
-      return `等待 ${who(gs.toAct)} 表态`
+      if (calls.length) return `${kindName(gs.pending.kind)} from ${who(gs.pending.from)} — do you want it?`
+      return `Waiting for ${who(gs.toAct)} to call or pass`
     }
     if (gs.phase === 'turn') {
-      if (gs.toAct === me && seated) return gs.mustDiscard ? '请出牌' : '轮到你 — 点一下选牌，再点一下打出'
-      return `等待 ${who(gs.toAct)} 出牌`
+      if (gs.toAct === me && seated) return gs.mustDiscard ? 'Discard a tile — tap to lift, tap again to throw' : 'Your turn — tap a tile to lift it, tap again to discard'
+      return `Waiting for ${who(gs.toAct)} to discard`
     }
     return ''
   })
@@ -98,28 +98,28 @@
   const lastLine = $derived.by(() => {
     const l = gs.last
     if (!l) return ''
-    const verb: Record<string, string> = { discard: '打', chi: '吃', peng: '碰', gang: '杠', hu: '胡' }
-    return verb[l.type] ? `${who(l.seat)} ${verb[l.type]}${l.kind !== null && l.kind >= 0 ? ' ' + kindName(l.kind) : ''}` : ''
+    const verb: Record<string, string> = { discard: 'Discard', chi: 'Chow 吃', peng: 'Pung 碰', gang: 'Kong 杠', hu: 'Win 胡' }
+    return verb[l.type] ? `${who(l.seat)} · ${verb[l.type]}${l.kind !== null && l.kind >= 0 ? ' · ' + kindName(l.kind) : ''}` : ''
   })
 
   /** The discard everyone is looking at: lit in its owner's pool. */
   const litSeat = $derived(gs.last?.type === 'discard' && gs.phase !== 'handOver' ? gs.last.seat : null)
 
   function callLabel(m: Move): string {
-    if (m.type === 'hu') return gs.phase === 'turn' ? '自摸' : '胡'
-    if (m.type === 'gang') return calls.filter((c) => c.type === 'gang').length > 1 ? `杠 ${kindName(m.kind)}` : '杠'
-    if (m.type === 'peng') return '碰'
-    if (m.type === 'pass') return '过'
-    return '吃'
+    if (m.type === 'hu') return gs.phase === 'turn' ? 'Win 胡 (self-draw)' : 'Win 胡'
+    if (m.type === 'gang') return calls.filter((c) => c.type === 'gang').length > 1 ? `Kong 杠 · ${kindName(m.kind)}` : 'Kong 杠'
+    if (m.type === 'peng') return 'Pung 碰'
+    if (m.type === 'pass') return 'Pass'
+    return 'Chow 吃'
   }
 
   /** Another player's 暗杠 stays face down until the hand is over. */
   const meldTiles = (m: Meld): Kind[] => (m.concealed && gs.phase !== 'handOver' && gs.phase !== 'over' ? m.kinds.map(() => -1) : m.kinds)
   const resultTitle = $derived.by(() => {
     if (!last) return ''
-    if (last.how === 'draw') return '流局'
-    if (last.how === 'zimo') return `${who(last.winner!)} 自摸`
-    return `${who(last.winner!)} ${last.how === 'rob' ? '抢杠胡' : '胡'} · ${who(last.from!)} 点炮`
+    if (last.how === 'draw') return 'Draw — the wall ran out'
+    if (last.how === 'zimo') return `Winner: ${who(last.winner!)} · self-draw`
+    return `Winner: ${who(last.winner!)} · ${last.how === 'rob' ? 'robbed the kong of' : 'on the discard of'} ${who(last.from!)}`
   })
   const standings = $derived(gs.scores.map((score, seat) => ({ seat, score })).sort((a, b) => b.score - a.score))
   const signed = (v: number) => (v > 0 ? '+' : '') + v
@@ -128,7 +128,7 @@
 <main class="table">
   <header class="bar">
     <span class="label">Room {session.room}</span>
-    <span class="label tabular">第 {gs.handIndex + 1} / {gs.config.maxHands} 局 · 余 {gs.wall.length} 张</span>
+    <span class="label tabular">Hand {gs.handIndex + 1} / {gs.config.maxHands} · {gs.wall.length} tiles left</span>
     <span class="grow"></span>
     <button class="chip" onclick={() => { muted = !muted; setMuted(muted) }} aria-pressed={!muted}>{muted ? 'Sound off' : 'Sound on'}</button>
     <button class="chip" onclick={onExit}>Leave</button>
@@ -139,10 +139,10 @@
       <div class="opp" class:turn={gs.toAct === o.seat && !gs.result && gs.phase !== 'handOver'}>
         <div class="who">
           <span class="name">{names[o.seat]}</span>
-          {#if gs.dealer === o.seat}<span class="zhuang">庄</span>{/if}
-          {#if gs.autopilot[o.seat]}<span class="label">代打</span>{/if}
+          {#if gs.dealer === o.seat}<span class="zhuang">Dealer</span>{/if}
+          {#if gs.autopilot[o.seat]}<span class="label">bot playing</span>{/if}
         </div>
-        <div class="meta label tabular">{o.rel} · {gs.hands[o.seat].length} 张 · {signed(gs.scores[o.seat])}</div>
+        <div class="meta label tabular">{o.rel} · {gs.hands[o.seat].length} tiles · {signed(gs.scores[o.seat])} pts</div>
         {#if gs.melds[o.seat].length}
           <div class="melds small">
             {#each gs.melds[o.seat] as m, i (i)}
@@ -163,9 +163,9 @@
     {#if lastLine}<p class="call">{lastLine}</p>{/if}
     <p class="status">{status}</p>
     {#if takeover}
-      <button class="btn" onclick={() => submit(takeover)}>{names[session.absentSeat!]} 掉线了 — 让电脑代打</button>
+      <button class="btn" onclick={() => submit(takeover)}>{names[session.absentSeat!]} is away — let the bot play for them</button>
     {:else if session.absentSeat !== null}
-      <p class="status">{names[session.absentSeat]} 掉线了，等待重连…</p>
+      <p class="status">{names[session.absentSeat]} is away, waiting for them to reconnect…</p>
     {/if}
     {#if session.status === 'desync'}<p class="status">Out of sync with the table — waiting for a repair…</p>{/if}
   </section>
@@ -179,8 +179,8 @@
 
     <div class="myline">
       <span class="name">{names[me]}</span>
-      {#if gs.dealer === me}<span class="zhuang">庄</span>{/if}
-      <span class="label tabular">{signed(gs.scores[me])} 分</span>
+      {#if gs.dealer === me}<span class="zhuang">Dealer</span>{/if}
+      <span class="label tabular">{signed(gs.scores[me])} pts</span>
       {#if !seated}<span class="label">spectating</span>{/if}
       <span class="grow"></span>
       {#if gs.melds[me].length}
@@ -194,8 +194,8 @@
 
     {#if seated && gs.autopilot[me]}
       <div class="actions">
-        <span class="status">电脑正在替你打</span>
-        <button class="btn btn--gold" onclick={() => submit({ type: 'resume' })}>我回来了</button>
+        <span class="status">The bot is playing for you</span>
+        <button class="btn btn--gold" onclick={() => submit({ type: 'resume' })}>I'm back</button>
       </div>
     {:else if calls.length}
       <div class="actions" transition:fly={{ y: 10, duration: dur(160) }}>
@@ -228,7 +228,7 @@
 {#if handOver && last}
   <div class="overlay" transition:fade={{ duration: dur(200) }}>
     <div class="card panel" transition:fly={{ y: 40, duration: dur(320), easing: settle }}>
-      <p class="label">第 {last.handIndex + 1} / {gs.config.maxHands} 局{gs.result ? ' · 结束' : ''}</p>
+      <p class="label">Hand {last.handIndex + 1} / {gs.config.maxHands}{gs.result ? ' · final standings' : ''}</p>
       <h2>{resultTitle}</h2>
       {#if last.winner !== null}
         <div class="reveal small">
@@ -250,13 +250,13 @@
       {#if gs.result}
         <PayoutLine payout={session.payout} lock={session.lockState} />
         <div class="actions">
-          {#if seated}<button class="btn btn--gold" onclick={onRematch}>再来一场</button>{/if}
-          <button class="btn" onclick={onExit}>离开</button>
+          {#if seated}<button class="btn btn--gold" onclick={onRematch}>Play again</button>{/if}
+          <button class="btn" onclick={onExit}>Leave</button>
         </div>
       {:else if dealNext}
-        <div class="actions"><button class="btn btn--gold" onclick={() => submit({ type: 'nextHand' })}>下一局</button></div>
+        <div class="actions"><button class="btn btn--gold" onclick={() => submit({ type: 'nextHand' })}>Next hand</button></div>
       {:else}
-        <p class="wait">等待 {names[gs.toAct]} 发牌…</p>
+        <p class="wait">Waiting for {names[gs.toAct]} to deal the next hand…</p>
       {/if}
     </div>
   </div>
@@ -274,7 +274,8 @@
   .opp.turn, .mine.turn { border-color: var(--brass-hi); box-shadow: 0 0 0 1px var(--brass-hi), 0 0 18px rgb(236 208 126 / 0.25); }
   .who, .myline { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .zhuang { flex: none; background: var(--oxblood); color: var(--cream); font-size: 0.72rem; line-height: 1; padding: 3px 4px; border-radius: 4px; }
+  .zhuang { flex: none; background: var(--oxblood); color: var(--cream); font-size: 0.68rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1; padding: 3px 5px; border-radius: 4px; }
+  .card h2 { line-height: 1.2; }
   .meta { text-transform: none; letter-spacing: 0; }
   .pool { display: flex; flex-wrap: wrap; gap: 2px 1px; align-content: flex-start; }
   .pool.own { min-height: calc(var(--tw) * 1.4); justify-content: center; }

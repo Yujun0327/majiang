@@ -196,7 +196,7 @@ describe('rendered table', () => {
     document.body.appendChild(target)
     const instance = mount(GameScreen, { target, props: { session: acting, onExit: () => {}, onRematch: () => {} } })
     flushSync()
-    const pass = [...target.querySelectorAll('.actions button')].find((b) => b.textContent?.trim() === '过') as HTMLButtonElement | undefined
+    const pass = [...target.querySelectorAll('.actions button')].find((b) => b.textContent?.trim() === 'Pass') as HTMLButtonElement | undefined
     if (pass) {
       pass.click()
     } else {

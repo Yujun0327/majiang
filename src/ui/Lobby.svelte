@@ -85,7 +85,7 @@
           <span class="label">Hands</span>
           <div class="seg" role="group" aria-label="hands">
             {#each HAND_CHOICES as n (n)}
-              <button class="btn" class:btn--gold={session.hostMaxHands === n} onclick={() => (session.hostMaxHands = n)}>{n} 局</button>
+              <button class="btn" class:btn--gold={session.hostMaxHands === n} onclick={() => (session.hostMaxHands = n)}>{n} hands</button>
             {/each}
           </div>
           {#if POINT_VALUES.length}

@@ -11,10 +11,10 @@ export const suitOf = (k: Kind): number => (k < 27 ? Math.floor(k / 9) : 3)
 /** 0-based rank within the suit (0–8), or 0–6 for honors. */
 export const rankOf = (k: Kind): number => (k < 27 ? k % 9 : k - 27)
 
-const NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九']
-const SUIT = ['万', '筒', '条']
-const HONOR = ['东', '南', '西', '北', '中', '发', '白']
-export const kindName = (k: Kind): string => (k < 0 ? '?' : k < 27 ? NUM[k % 9] + SUIT[Math.floor(k / 9)] : HONOR[k - 27])
+const SUIT = ['Characters', 'Dots', 'Bamboo']
+const HONOR = ['East', 'South', 'West', 'North', 'Red', 'Green', 'White']
+/** English name for labels and status lines, e.g. "3 Bamboo", "East", "Red". */
+export const kindName = (k: Kind): string => (k < 0 ? '?' : k < 27 ? `${(k % 9) + 1} ${SUIT[Math.floor(k / 9)]}` : HONOR[k - 27])
 
 /** The 136-tile set, in kind order. */
 export function fullSet(): Kind[] {

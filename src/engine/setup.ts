@@ -2,11 +2,11 @@ import { shuffleWithState } from './rng'
 import { fullSet, sortTiles } from './tiles'
 import { SEATS, type GameConfig, type GameState } from './types'
 
-export const BOT_NAMES = ['电脑·东', '电脑·南', '电脑·西', '电脑·北']
+export const BOT_NAMES = ['Bot East', 'Bot South', 'Bot West', 'Bot North']
 
 export function defaultConfig(over: Partial<GameConfig> = {}): GameConfig {
   const humans = Math.max(1, Math.min(SEATS, over.humans ?? 1))
-  const names = Array.from({ length: SEATS }, (_, i) => (i < humans ? over.names?.[i]?.trim() || `玩家${i + 1}` : BOT_NAMES[i]))
+  const names = Array.from({ length: SEATS }, (_, i) => (i < humans ? over.names?.[i]?.trim() || `Player ${i + 1}` : BOT_NAMES[i]))
   return {
     sharedSeed: 1,
     startingDealer: 0,

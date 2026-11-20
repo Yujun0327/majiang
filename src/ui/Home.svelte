@@ -27,7 +27,8 @@
       {#each [27, 31, 0, 13, 22, 32, 33] as k (k)}<Tile kind={k} />{/each}
     </div>
     <h1><span class="foil-text">麻将</span></h1>
-    <p class="tag">推倒胡 for four. Friends take seats; the computer fills the rest.</p>
+    <p class="label kicker">Mahjong</p>
+    <p class="tag">Mahjong for four, simple rules. Friends take seats; bots fill the rest.</p>
   </header>
   <WalletBadge />
 
@@ -46,7 +47,7 @@
     </div>
     <p class="hint">Open a table and start alone against three bots, or send the invite and let friends take the seats. Your tiles are yours alone — play it straight.</p>
     <div class="row">
-      <button class="btn btn--quiet" onclick={() => (rulesOpen = true)}>规则 · Rules</button>
+      <button class="btn btn--quiet" onclick={() => (rulesOpen = true)}>Rules</button>
     </div>
   </section>
 
@@ -59,14 +60,14 @@
 {#if rulesOpen}
   <Modal onClose={() => (rulesOpen = false)}>
     <div class="rules">
-      <h2>推倒胡</h2>
+      <h2>How to play</h2>
       <ul>
-        <li>136 tiles: 万 筒 条 plus winds and dragons. No flowers.</li>
-        <li><b>胡</b> with four melds and a pair — any mix of runs, triplets and 杠 — or with seven pairs (七对). No minimum.</li>
-        <li><b>吃</b> only from the player before you; <b>碰</b> and <b>杠</b> from anyone. 胡 beats 碰/杠, which beat 吃.</li>
-        <li>You may 胡 on a discard (点炮) or rob an added 杠 (抢杠胡).</li>
-        <li><b>Points.</b> 点炮: the discarder pays 2. 自摸: everyone pays 2. 暗杠: everyone pays 2. 补杠: everyone pays 1. 明杠: the discarder pays 3.</li>
-        <li>流局 (the wall runs out): nobody pays, 杠 included. The winner deals next; after a draw the dealer stays.</li>
+        <li><b>Tiles.</b> 136 in three suits numbered 1–9 — Characters (萬), Dots and Bamboo — plus the winds East 東, South 南, West 西, North 北 and the dragons Red 中, Green 發, White (the blue frame). No flowers.</li>
+        <li><b>Winning (胡).</b> Four sets and a pair. A set is a run of three in one suit, three of a kind, or four of a kind. Seven pairs also wins. There is no minimum score.</li>
+        <li><b>Chow (吃)</b> takes a discard to finish a run, only from the player right before you. <b>Pung (碰)</b> takes any discard for three of a kind, <b>Kong (杠)</b> for four. A win beats a pung or kong, which beat a chow.</li>
+        <li>You can win on someone's discard, on your own draw, or by robbing a kong that someone adds to their pung.</li>
+        <li><b>Points.</b> Win on a discard: the discarder pays 2. Win on your own draw: everyone pays 2. Concealed kong: everyone pays 2. Kong added to a pung: everyone pays 1. Kong from a discard: the discarder pays 3.</li>
+        <li><b>Draw.</b> If the wall runs out nobody pays, kongs included. The winner deals the next hand; after a draw the dealer stays.</li>
       </ul>
       <button class="btn" onclick={() => (rulesOpen = false)}>Close</button>
     </div>
