@@ -10,7 +10,7 @@ export const RULES_VERSION = '1'
 /** Hands per session the host may pick. */
 export const HAND_CHOICES = [4, 8, 16]
 /** Bot moves are revealed one at a time, this far apart. */
-const STEP_MS = 520
+const STEP_MS = 750
 
 const TABLE = (MONEY_RULES as Record<string, { table?: { buyIns: number[]; pointValues?: number[]; capPoints?: number } } | undefined>)[APP]?.table
 /** Cash per point on offer; empty until the ledger knows this game (free play only). */

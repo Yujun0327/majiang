@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import { fade, fly } from 'svelte/transition'
   import type { OnlineSession } from '../app/session.svelte'
-  import { SEATS, kindName, sameMove, type Kind, type Meld, type Move, type Seat } from '../engine'
+  import { kindName, sameMove, waits, type Kind, type Move, type Seat } from '../engine'
   import { isMuted, play, setMuted, unlock } from './audio'
   import { dur, settle } from './motion'
   import PayoutLine from './PayoutLine.svelte'
+  import Table from './Table.svelte'
   import Tile from './Tile.svelte'
 
   interface Props {
@@ -18,10 +20,15 @@
   const gs = $derived(session.view)
   const seated = $derived(session.mySeat !== null)
   const me = $derived(session.mySeat ?? 0)
-  /** Across the top, left to right: the player before me, across, and after me. */
-  const opponents = $derived([3, 2, 1].map((d) => ({ seat: (me + d) % SEATS, rel: ['', 'plays after you', 'across', 'plays before you'][d] })))
   const names = $derived(gs.config.names)
   const who = (seat: Seat) => (seated && seat === me ? 'You' : names[seat])
+
+  // one tick per revealed step, so the board's one-shot effects replay
+  let tick = $state(0)
+  $effect(() => {
+    void session.shown
+    tick = untrack(() => tick) + 1
+  })
 
   const moves = $derived(session.myMoves())
   const canDiscard = $derived(new Set(moves.filter((m) => m.type === 'discard').map((m) => (m as { kind: Kind }).kind)))
@@ -29,6 +36,17 @@
   const dealNext = $derived(moves.some((m) => m.type === 'nextHand'))
   const handOver = $derived((gs.phase === 'handOver' || gs.phase === 'over') && !session.busy)
   const last = $derived(gs.lastHand)
+
+  // let the table show the finished hand for a beat before the result sheet covers it
+  let sheet = $state(false)
+  $effect(() => {
+    if (!handOver) {
+      sheet = false
+      return
+    }
+    const t = setTimeout(() => (sheet = true), dur(1700))
+    return () => clearTimeout(t)
+  })
 
   /** My concealed tiles, the freshly drawn one set apart on the right. */
   const myHand = $derived.by(() => {
@@ -38,6 +56,29 @@
     tiles.splice(tiles.indexOf(gs.drawn!), 1)
     return { tiles, drawn: gs.drawn }
   })
+
+  /** The tiles each call would lay down, for the buttons. */
+  function setOf(m: Move): Kind[] {
+    const k = gs.pending?.kind
+    if (m.type === 'chi' && k !== undefined) return [...m.use, k].sort((a, b) => a - b)
+    if (m.type === 'peng' && k !== undefined) return [k, k, k]
+    if (m.type === 'gang') return [m.kind, m.kind, m.kind, m.kind]
+    return []
+  }
+
+  /** While I am being offered a tile, the tiles in my hand that could take it stand up. */
+  const hinted = $derived.by(() => {
+    const out = new Set<Kind>()
+    if (gs.phase !== 'claim' || !gs.pending) return out
+    for (const m of calls) {
+      if (m.type === 'chi') m.use.forEach((k) => out.add(k))
+      else if (m.type === 'peng' || m.type === 'gang') out.add(gs.pending.kind)
+    }
+    return out
+  })
+
+  /** One tile from winning: the tiles that would finish my hand. */
+  const ready = $derived(seated && (gs.phase === 'turn' || gs.phase === 'claim') ? waits(gs.hands[me], gs.melds[me].length) : [])
 
   let picked = $state<number | null>(null)
   let muted = $state(isMuted())
@@ -83,38 +124,28 @@
   )
 
   const status = $derived.by(() => {
-    if (session.busy) return ''
+    if (session.status === 'desync') return 'Out of sync with the table — waiting for a repair…'
+    if (session.absentSeat !== null && !takeover) return `${names[session.absentSeat]} is away, waiting for them to reconnect…`
+    if (session.busy) return 'The others are playing…'
     if (gs.phase === 'claim' && gs.pending) {
-      if (calls.length) return `${kindName(gs.pending.kind)} from ${who(gs.pending.from)} — do you want it?`
+      if (calls.length) return `${who(gs.pending.from)} threw ${kindName(gs.pending.kind)} — do you want it?`
       return `Waiting for ${who(gs.toAct)} to call or pass`
     }
     if (gs.phase === 'turn') {
-      if (gs.toAct === me && seated) return gs.mustDiscard ? 'Discard a tile — tap to lift, tap again to throw' : 'Your turn — tap a tile to lift it, tap again to discard'
-      return `Waiting for ${who(gs.toAct)} to discard`
+      if (gs.toAct === me && seated) return gs.mustDiscard ? 'Now throw one — tap a tile, tap it again' : 'Your turn — tap a tile, tap it again to throw it'
+      return `Waiting for ${who(gs.toAct)} to throw a tile`
     }
     return ''
   })
 
-  const lastLine = $derived.by(() => {
-    const l = gs.last
-    if (!l) return ''
-    const verb: Record<string, string> = { discard: 'Discard', chi: 'Chow 吃', peng: 'Pung 碰', gang: 'Kong 杠', hu: 'Win 胡' }
-    return verb[l.type] ? `${who(l.seat)} · ${verb[l.type]}${l.kind !== null && l.kind >= 0 ? ' · ' + kindName(l.kind) : ''}` : ''
-  })
-
-  /** The discard everyone is looking at: lit in its owner's pool. */
-  const litSeat = $derived(gs.last?.type === 'discard' && gs.phase !== 'handOver' ? gs.last.seat : null)
-
   function callLabel(m: Move): string {
     if (m.type === 'hu') return gs.phase === 'turn' ? 'Win 胡 (self-draw)' : 'Win 胡'
-    if (m.type === 'gang') return calls.filter((c) => c.type === 'gang').length > 1 ? `Kong 杠 · ${kindName(m.kind)}` : 'Kong 杠'
+    if (m.type === 'gang') return 'Kong 杠'
     if (m.type === 'peng') return 'Pung 碰'
     if (m.type === 'pass') return 'Pass'
     return 'Chow 吃'
   }
 
-  /** Another player's 暗杠 stays face down until the hand is over. */
-  const meldTiles = (m: Meld): Kind[] => (m.concealed && gs.phase !== 'handOver' && gs.phase !== 'over' ? m.kinds.map(() => -1) : m.kinds)
   const resultTitle = $derived.by(() => {
     if (!last) return ''
     if (last.how === 'draw') return 'Draw — the wall ran out'
@@ -125,72 +156,32 @@
   const signed = (v: number) => (v > 0 ? '+' : '') + v
 </script>
 
-<main class="table">
+<main class="screen">
   <header class="bar">
     <span class="label">Room {session.room}</span>
-    <span class="label tabular">Hand {gs.handIndex + 1} / {gs.config.maxHands} · {gs.wall.length} tiles left</span>
+    {#if !seated}<span class="label">spectating</span>{/if}
     <span class="grow"></span>
     <button class="chip" onclick={() => { muted = !muted; setMuted(muted) }} aria-pressed={!muted}>{muted ? 'Sound off' : 'Sound on'}</button>
     <button class="chip" onclick={onExit}>Leave</button>
   </header>
 
-  <section class="opps">
-    {#each opponents as o (o.seat)}
-      <div class="opp" class:turn={gs.toAct === o.seat && !gs.result && gs.phase !== 'handOver'}>
-        <div class="who">
-          <span class="name">{names[o.seat]}</span>
-          {#if gs.dealer === o.seat}<span class="zhuang">Dealer</span>{/if}
-          {#if gs.autopilot[o.seat]}<span class="label">bot playing</span>{/if}
-        </div>
-        <div class="meta label tabular">{o.rel} · {gs.hands[o.seat].length} tiles · {signed(gs.scores[o.seat])} pts</div>
-        {#if gs.melds[o.seat].length}
-          <div class="melds small">
-            {#each gs.melds[o.seat] as m, i (i)}
-              <span class="meld">{#each meldTiles(m) as k, j (j)}<Tile kind={k} />{/each}</span>
-            {/each}
-          </div>
-        {/if}
-        <div class="pool small">
-          {#each gs.discards[o.seat] as k, i (i)}
-            <Tile kind={k} lit={litSeat === o.seat && i === gs.discards[o.seat].length - 1} />
-          {/each}
-        </div>
+  <Table {gs} {me} {seated} {tick} />
+
+  <section class="mine">
+    {#if ready.length}
+      <div class="ready">
+        <span>One tile from winning — waiting for</span>
+        <span class="run">{#each ready as k (k)}<Tile kind={k} />{/each}</span>
       </div>
-    {/each}
-  </section>
-
-  <section class="centre">
-    {#if lastLine}<p class="call">{lastLine}</p>{/if}
-    <p class="status">{status}</p>
-    {#if takeover}
-      <button class="btn" onclick={() => submit(takeover)}>{names[session.absentSeat!]} is away — let the bot play for them</button>
-    {:else if session.absentSeat !== null}
-      <p class="status">{names[session.absentSeat]} is away, waiting for them to reconnect…</p>
     {/if}
-    {#if session.status === 'desync'}<p class="status">Out of sync with the table — waiting for a repair…</p>{/if}
-  </section>
 
-  <section class="mine" class:turn={seated && gs.toAct === me && gs.phase === 'turn'}>
-    <div class="pool small own">
-      {#each gs.discards[me] as k, i (i)}
-        <Tile kind={k} lit={litSeat === me && i === gs.discards[me].length - 1} />
-      {/each}
-    </div>
+    <p class="status" class:mine-turn={calls.length > 0 || (seated && gs.toAct === me && gs.phase === 'turn' && !session.busy)}>{status}</p>
 
-    <div class="myline">
-      <span class="name">{names[me]}</span>
-      {#if gs.dealer === me}<span class="zhuang">Dealer</span>{/if}
-      <span class="label tabular">{signed(gs.scores[me])} pts</span>
-      {#if !seated}<span class="label">spectating</span>{/if}
-      <span class="grow"></span>
-      {#if gs.melds[me].length}
-        <div class="melds small">
-          {#each gs.melds[me] as m, i (i)}
-            <span class="meld">{#each m.kinds as k, j (j)}<Tile kind={k} />{/each}</span>
-          {/each}
-        </div>
-      {/if}
-    </div>
+    {#if takeover}
+      <div class="actions">
+        <button class="btn" onclick={() => submit(takeover)}>{names[session.absentSeat!]} is away — let the bot play for them</button>
+      </div>
+    {/if}
 
     {#if seated && gs.autopilot[me]}
       <div class="actions">
@@ -202,40 +193,42 @@
         {#each calls as m, i (i)}
           <button class="btn call-btn" class:btn--gold={m.type === 'hu'} class:btn--quiet={m.type === 'pass'} onclick={() => submit(m)}>
             <span>{callLabel(m)}</span>
-            {#if m.type === 'chi' && gs.pending}
-              <span class="run">{#each [...m.use, gs.pending.kind].sort((a, b) => a - b) as k, j (j)}<Tile kind={k} />{/each}</span>
+            {#if setOf(m).length}
+              <span class="run">{#each setOf(m) as k, j (j)}<Tile kind={k} />{/each}</span>
             {/if}
           </button>
         {/each}
       </div>
     {/if}
 
-    <div class="hand">
-      {#each myHand.tiles as k, i (i)}
-        <button class="slot" class:up={picked === i} class:dead={seated && !canDiscard.has(k)} disabled={!seated} onclick={() => tap(i, k)} aria-label={kindName(k)}>
-          <Tile kind={k} />
-        </button>
-      {/each}
-      {#if myHand.drawn !== null}
-        <button class="slot drawn" class:up={picked === -1} class:dead={!canDiscard.has(myHand.drawn)} onclick={() => tap(-1, myHand.drawn!)} aria-label={kindName(myHand.drawn)}>
-          <Tile kind={myHand.drawn} />
-        </button>
-      {/if}
-    </div>
+    {#if seated}
+      <div class="hand">
+        {#each myHand.tiles as k, i (i)}
+          <button class="slot" class:up={picked === i} class:hint={hinted.has(k)} class:dead={!canDiscard.has(k)} onclick={() => tap(i, k)} aria-label={kindName(k)}>
+            <Tile kind={k} />
+          </button>
+        {/each}
+        {#if myHand.drawn !== null}
+          <button class="slot drawn" class:up={picked === -1} class:dead={!canDiscard.has(myHand.drawn)} onclick={() => tap(-1, myHand.drawn!)} aria-label={kindName(myHand.drawn)} in:fly={{ y: -34, duration: dur(280), easing: settle }}>
+            <Tile kind={myHand.drawn} />
+          </button>
+        {/if}
+      </div>
+    {/if}
   </section>
 </main>
 
-{#if handOver && last}
+{#if sheet && last}
   <div class="overlay" transition:fade={{ duration: dur(200) }}>
     <div class="card panel" transition:fly={{ y: 40, duration: dur(320), easing: settle }}>
       <p class="label">Hand {last.handIndex + 1} / {gs.config.maxHands}{gs.result ? ' · final standings' : ''}</p>
       <h2>{resultTitle}</h2>
       {#if last.winner !== null}
-        <div class="reveal small">
+        <div class="reveal">
           {#each gs.melds[last.winner] as m, i (i)}
             <span class="meld">{#each m.kinds as k, j (j)}<Tile kind={k} />{/each}</span>
           {/each}
-          <span class="meld">{#each gs.hands[last.winner] as k, j (j)}<Tile kind={k} lit={k === last.tile} />{/each}</span>
+          <span class="meld">{#each gs.hands[last.winner] as k, j (j)}<Tile kind={k} lit={last.tile !== null && j === gs.hands[last.winner].indexOf(last.tile)} />{/each}</span>
         </div>
       {/if}
       <ol class="rows">
@@ -263,45 +256,31 @@
 {/if}
 
 <style>
-  .table { min-height: 100dvh; display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) var(--sp-2) max(var(--sp-2), env(safe-area-inset-bottom)); max-width: 980px; margin: 0 auto; }
-  .bar { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+  .screen { min-height: 100dvh; display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) 4px max(var(--sp-2), env(safe-area-inset-bottom)); max-width: 980px; margin: 0 auto; }
+  .bar { display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-2); min-height: 32px; }
   .grow { flex: 1; }
   .chip { background: transparent; border: 1px solid rgb(243 236 218 / 0.3); color: var(--on-felt); border-radius: 999px; padding: 4px 12px; font-size: var(--fs-xs); min-height: 30px; }
 
-  .small { --tw: clamp(15px, 4.1vw, 28px); }
-  .opps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); align-items: start; }
-  .opp { background: rgb(0 0 0 / 0.2); border: 1px solid rgb(243 236 218 / 0.12); border-radius: var(--radius); padding: var(--sp-2); display: flex; flex-direction: column; gap: 6px; min-height: 9.5rem; }
-  .opp.turn, .mine.turn { border-color: var(--brass-hi); box-shadow: 0 0 0 1px var(--brass-hi), 0 0 18px rgb(236 208 126 / 0.25); }
-  .who, .myline { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .zhuang { flex: none; background: var(--oxblood); color: var(--cream); font-size: 0.68rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1; padding: 3px 5px; border-radius: 4px; }
-  .card h2 { line-height: 1.2; }
-  .meta { text-transform: none; letter-spacing: 0; }
-  .pool { display: flex; flex-wrap: wrap; gap: 2px 1px; align-content: flex-start; }
-  .pool.own { min-height: calc(var(--tw) * 1.4); justify-content: center; }
-  .melds, .reveal { display: flex; flex-wrap: wrap; gap: 4px 8px; }
-  .meld { display: flex; gap: 1px; }
-
-  .centre { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-2); text-align: center; min-height: 4.5rem; }
-  .call { margin: 0; font-family: var(--font-display); font-size: var(--fs-lg); color: var(--brass-hi); }
-  .status { margin: 0; color: var(--smoke); font-size: var(--fs-sm); min-height: 1.45em; }
-
-  .mine { border: 1px solid transparent; border-radius: var(--radius); padding: var(--sp-2) 0; display: flex; flex-direction: column; gap: var(--sp-2); }
-  .myline { padding: 0 var(--sp-2); flex-wrap: wrap; }
+  .mine { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--sp-2); min-height: 9.5rem; }
+  .status { margin: 0; text-align: center; color: var(--smoke); font-size: var(--fs-sm); min-height: 1.45em; }
+  .status.mine-turn { color: var(--brass-hi); font-weight: 600; }
+  .ready { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--on-felt); background: rgb(0 0 0 / 0.25); border: 1px solid rgb(236 208 126 / 0.45); border-radius: 999px; padding: 4px 12px; align-self: center; }
+  .run { display: flex; gap: 1px; --tw: 20px; }
   .actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; justify-content: center; align-items: center; }
-  .call-btn { display: flex; align-items: center; gap: 8px; font-size: var(--fs-md); padding: 8px 18px; }
-  .call-btn .run { display: flex; gap: 1px; --tw: 20px; }
-  .hand { --tw: clamp(22px, calc((100vw - 30px) / 14.4), 56px); display: flex; justify-content: center; align-items: flex-end; gap: 1px; padding-top: calc(var(--tw) * 0.35); }
-  .slot { background: none; border: none; padding: 0; transition: transform 110ms ease; }
-  .slot.up { transform: translateY(calc(var(--tw) * -0.3)); }
+  .call-btn { display: flex; align-items: center; gap: 8px; font-size: var(--fs-md); padding: 8px 16px; }
+
+  .hand { --tw: clamp(22px, calc((100vw - 30px) / 14.4), 56px); display: flex; justify-content: center; align-items: flex-end; gap: 1px; padding-top: calc(var(--tw) * 0.38); }
+  .slot { background: none; border: none; padding: 0; transition: transform 110ms ease, filter 110ms ease; }
+  .slot.hint { transform: translateY(calc(var(--tw) * -0.18)); filter: drop-shadow(0 0 6px var(--brass-hi)); }
+  .slot.up { transform: translateY(calc(var(--tw) * -0.32)); }
   .slot.dead { cursor: default; }
   .slot.drawn { margin-left: calc(var(--tw) * 0.35); }
-  .slot:disabled { cursor: default; }
 
   .overlay { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgb(0 0 0 / 0.55); padding: var(--sp-3); }
   .card { width: min(96vw, 520px); padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-3); max-height: 92dvh; overflow-y: auto; }
-  .card h2 { font-size: var(--fs-xl); color: var(--ink); }
-  .reveal { --tw: clamp(16px, 5vw, 26px); }
+  .card h2 { font-size: var(--fs-xl); line-height: 1.2; color: var(--ink); }
+  .reveal { --tw: clamp(16px, 5vw, 26px); display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  .meld { display: flex; gap: 1px; }
   .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
   .rows li { display: flex; gap: var(--sp-3); border-top: 1px solid var(--line); padding: 6px 0; font-family: var(--font-body); }
   .rows li.me .rname { color: var(--brass-lo); }
