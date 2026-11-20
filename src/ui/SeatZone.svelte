@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DRAW_DELAY_MS } from '../app/timing'
+  import { DEAL_FLIGHT_MS, DRAW_DELAY_MS, FLIGHT_MS } from '../app/timing'
   import { SEATS, type GameState, type Meld, type Seat } from '../engine'
   import { flyFrom } from './motion'
   import { handRect, places, stackRect } from './places'
@@ -53,7 +53,7 @@
 
   /** A draw (or a dealt batch): from the wall stack it left, into the hand. */
   function drawIn(node: Element) {
-    return flyFrom(node, { from: stackRect(stackOfLast(drawn)), rot, spin: 0, delay: dealing ? 0 : DRAW_DELAY_MS, duration: dealing ? 360 : 520 })
+    return flyFrom(node, { from: stackRect(stackOfLast(drawn)), rot, spin: 0, delay: dealing ? 0 : DRAW_DELAY_MS, duration: dealing ? DEAL_FLIGHT_MS : FLIGHT_MS })
   }
 
   /**
@@ -71,7 +71,7 @@
   let riverEl = $state<HTMLElement>()
   $effect(() => {
     void gs.discards[seat].length
-    const t = setTimeout(() => (places.river[seat] = riverEl?.lastElementChild?.getBoundingClientRect() ?? null), 700)
+    const t = setTimeout(() => (places.river[seat] = riverEl?.lastElementChild?.getBoundingClientRect() ?? null), FLIGHT_MS + 250)
     return () => clearTimeout(t)
   })
 </script>
@@ -120,7 +120,7 @@
 
   .river { position: absolute; top: 65.7cqw; left: 50%; width: 30.6cqw; margin-left: -15.3cqw; display: grid; grid-template-columns: repeat(7, 4.2cqw); gap: 0.25cqw 0.2cqw; --tw: 4.2cqw; }
   /* the newest discard lands with a ring spreading out from it */
-  .cell.newest::after { content: ''; position: absolute; inset: -18%; border-radius: 22%; border: 0.4cqw solid var(--brass-hi); opacity: 0; animation: ripple 620ms ease-out 430ms both; }
+  .cell.newest::after { content: ''; position: absolute; inset: -18%; border-radius: 22%; border: 0.4cqw solid var(--brass-hi); opacity: 0; animation: ripple 930ms ease-out 650ms both; }
 
   .plate { position: absolute; left: 50%; bottom: 7.1cqw; transform: translateX(-50%); display: flex; align-items: center; gap: 1cqw; max-width: 60cqw; padding: 0.3cqw 1.6cqw; border-radius: 99px; background: rgb(0 0 0 / 0.32); border: 1px solid rgb(243 236 218 / 0.14); font-size: clamp(9.5px, 2.3cqw, 15px); line-height: 1.3; white-space: nowrap; transition: border-color 200ms ease, box-shadow 200ms ease; }
   .plate.flip { transform: translateX(-50%) rotate(180deg); }

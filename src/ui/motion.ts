@@ -1,4 +1,5 @@
 /** Shared motion vocabulary. JS transitions honor reduced-motion via zeroed durations. */
+import { CALL_FLIGHT_MS, FLIGHT_MS } from '../app/timing'
 
 export function motionOk(): boolean {
   return typeof matchMedia === 'undefined' || !matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -76,7 +77,7 @@ export function flyFrom(node: Element, { from, via = null, rot = 0, delay = 0, d
   const mix = (p: typeof A, q: typeof A, e: number) => ({ x: p.x + (q.x - p.x) * e, y: p.y + (q.y - p.y) * e, s: p.s + (q.s - p.s) * e })
   return {
     delay,
-    duration: duration ?? (B || wait ? 1050 : 520),
+    duration: duration ?? (B || wait ? CALL_FLIGHT_MS : FLIGHT_MS),
     css: (t: number) => {
       let at = A
       let e = 0

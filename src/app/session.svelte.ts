@@ -5,7 +5,7 @@ import { MONEY_RULES, WalletSession, defaultLedger, loadIdentity, type Identity,
 import { APP } from './persist'
 import { CALL_MS, DEAL_MS, STEP_MS } from './timing'
 
-export type SfxEvent = 'tile' | 'claim' | 'gang' | 'win' | 'lose' | 'draw' | 'deal' | 'dice' | 'shuffle'
+export type SfxEvent = 'tile' | 'pick' | 'chi' | 'peng' | 'gang' | 'win' | 'lose' | 'draw' | 'deal' | 'dice' | 'shuffle'
 
 export const RULES_VERSION = '1'
 /** Hands per session the host may pick. */
@@ -265,10 +265,13 @@ export class OnlineSession {
     if (next.lastHand && next.lastHand !== before.lastHand && next.lastHand.handIndex !== before.lastHand?.handIndex) {
       const w = next.lastHand.winner
       this.emit(w === null ? 'draw' : w === this.core.seat ? 'win' : 'lose')
-    } else if (t === 'discard') this.emit('tile')
-    else if (t === 'gang') this.emit('gang')
-    else if (t === 'chi' || t === 'peng') this.emit('claim')
-    else if (t === 'nextHand') this.emit('deal')
+    } else if (t === 'discard') {
+      this.emit('tile')
+      // the same step may already hold the next player's draw
+      if (next.phase === 'turn' && next.drawn !== null) this.emit('pick')
+    } else if (t === 'gang') this.emit('gang')
+    else if (t === 'chi') this.emit('chi')
+    else if (t === 'peng') this.emit('peng')
   }
 
   private emit(sfx: SfxEvent): void {

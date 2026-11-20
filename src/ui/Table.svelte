@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DICE_MS } from '../app/timing'
+  import { ROLL_MS } from '../app/timing'
   import { SEATS, kindName, type GameState, type Seat } from '../engine'
   import Dice from './Dice.svelte'
   import type { DealIntro } from './intro.svelte'
@@ -49,7 +49,7 @@
     {#if live}<div class="pointer" style="transform: rotate({ROT[rel(gs.toAct)]}deg)"><span></span></div>{/if}
     {#if intro.stage === 'dice' || intro.stage === 'deal'}
       <div class="roll">
-        <Dice values={openingOf(gs).dice} rollMs={DICE_MS - 800} />
+        <Dice values={openingOf(gs).dice} rollMs={ROLL_MS} />
       </div>
     {:else}
       <div class="info">
@@ -87,14 +87,14 @@
   .cap.dim { opacity: 0.75; max-width: 14cqw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wall { font-family: var(--font-display); font-size: clamp(18px, 6cqw, 44px); line-height: 1; color: var(--brass-hi); font-variant-numeric: tabular-nums; }
   /* the big readable copy appears as the thrown tile lands */
-  .thrown { --tw: 9cqw; animation: show 380ms ease-out 400ms both; }
+  .thrown { --tw: 9cqw; animation: show 570ms ease-out 600ms both; }
   .thrown .cap { color: var(--on-felt); }
 
   /* a brass bar on the centre plate's edge, on the side of whoever must act */
   .pointer { position: absolute; inset: 0; pointer-events: none; transition: transform 260ms ease; }
   .pointer span { position: absolute; left: 18%; right: 18%; bottom: -0.5cqw; height: 0.9cqw; border-radius: 1cqw; background: var(--brass-hi); box-shadow: 0 0 2cqw var(--brass-hi); animation: pulse 1.4s ease-in-out infinite; }
 
-  .callout { position: absolute; z-index: 8; transform: translate(-50%, -50%); font-family: var(--font-display); font-weight: 700; font-size: clamp(20px, 7cqw, 52px); line-height: 1; white-space: nowrap; color: var(--cream); background: var(--oxblood); border: 0.4cqw solid var(--brass-hi); border-radius: 1.6cqw; padding: 1.4cqw 2.6cqw; box-shadow: 0 6px 18px rgb(0 0 0 / 0.5); pointer-events: none; animation: stamp 1500ms ease-out both; }
+  .callout { position: absolute; z-index: 8; transform: translate(-50%, -50%); font-family: var(--font-display); font-weight: 700; font-size: clamp(20px, 7cqw, 52px); line-height: 1; white-space: nowrap; color: var(--cream); background: var(--oxblood); border: 0.4cqw solid var(--brass-hi); border-radius: 1.6cqw; padding: 1.4cqw 2.6cqw; box-shadow: 0 6px 18px rgb(0 0 0 / 0.5); pointer-events: none; animation: stamp 2250ms ease-out both; }
   .at0 { left: 50%; top: 76%; }
   .at1 { left: 76%; top: 50%; }
   .at2 { left: 50%; top: 24%; }

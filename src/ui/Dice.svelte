@@ -15,7 +15,7 @@
       return
     }
     rolling = true
-    const spin = setInterval(() => (shown = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)]), 80)
+    const spin = setInterval(() => (shown = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)]), 130)
     const stop = setTimeout(() => {
       clearInterval(spin)
       shown = final
@@ -45,9 +45,9 @@
   .die i { border-radius: 50%; }
   .die i.on { background: #1c1a17; }
   .die i.on.red { background: #b3261e; }
-  .rolling .die { animation: tumble 260ms linear infinite; }
-  .rolling .d1 { animation-duration: 310ms; animation-direction: reverse; }
-  .dice:not(.rolling) .die { animation: land 260ms ease-out both; }
+  .rolling .die { animation: tumble 420ms linear infinite; }
+  .rolling .d1 { animation-duration: 500ms; animation-direction: reverse; }
+  .dice:not(.rolling) .die { animation: land 420ms ease-out both; }
   @keyframes tumble { 0% { transform: translate(-1.2cqw, -1.6cqw) rotate(0deg); } 50% { transform: translate(1.2cqw, 0.6cqw) rotate(180deg); } 100% { transform: translate(-1.2cqw, -1.6cqw) rotate(360deg); } }
   @keyframes land { from { transform: scale(1.35); } 60% { transform: scale(0.94); } to { transform: none; } }
 </style>

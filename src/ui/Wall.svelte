@@ -47,7 +47,7 @@
   .stack.lv0 { opacity: 0; box-shadow: none; }
   .stack.open { outline: 0.35cqw solid var(--brass-hi); outline-offset: 0.2cqw; animation: beacon 700ms ease-in-out infinite alternate; z-index: 2; position: relative; }
   .stack.last { filter: brightness(0.8); }
-  .building .stack { animation: build 320ms ease-out both; animation-delay: calc(var(--i) * 9ms); }
+  .building .stack { animation: build 900ms ease-out both; animation-delay: calc(var(--i) * 28ms); }
 
   @keyframes build { from { opacity: 0; transform: translateY(-3cqw) scale(1.5); } }
   @keyframes beacon { to { box-shadow: 0 0 2.4cqw 0.6cqw rgb(236 208 126 / 0.8); } }

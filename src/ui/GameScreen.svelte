@@ -3,7 +3,7 @@
   import { fade, fly } from 'svelte/transition'
   import type { OnlineSession } from '../app/session.svelte'
   import { kindName, sameMove, waits, type Kind, type Move, type Seat } from '../engine'
-  import { DRAW_DELAY_MS } from '../app/timing'
+  import { DEAL_FLIGHT_MS, DRAW_DELAY_MS, FLIGHT_MS } from '../app/timing'
   import { isMuted, play, setMuted, unlock } from './audio'
   import { DealIntro } from './intro.svelte'
   import { dur, flyFrom, settle } from './motion'
@@ -42,7 +42,7 @@
       intro.start((stage, grab) => {
         if (stage === 'build') play('shuffle')
         else if (stage === 'dice') play('dice')
-        else if (grab % 2 === 1) play('deal')
+        else play('deal')
       }),
     )
     return () => intro.stop()
@@ -63,7 +63,7 @@
       sheet = false
       return
     }
-    const t = setTimeout(() => (sheet = true), dur(1700))
+    const t = setTimeout(() => (sheet = true), dur(2600))
     return () => clearTimeout(t)
   })
 
@@ -127,13 +127,14 @@
   function fromWall(node: Element, { draw }: { draw: boolean }) {
     if (!draw && !intro.active) return { duration: 0 }
     const drawn = intro.drawn(gs.dealer) ?? drawnOf(gs)
-    return flyFrom(node, { from: stackRect(stackOfLast(drawn)), spin: 0, delay: draw ? DRAW_DELAY_MS : 0, duration: draw ? 560 : 360 })
+    return flyFrom(node, { from: stackRect(stackOfLast(drawn)), spin: 0, delay: draw ? DRAW_DELAY_MS : 0, duration: draw ? FLIGHT_MS : DEAL_FLIGHT_MS })
   }
 
   let lastSfx = -1
   $effect(() => {
-    const e = session.events.at(-1)
-    if (e && e.id !== lastSfx) {
+    // one step can raise two sounds (a throw, then the next player's draw)
+    for (const e of session.events) {
+      if (e.id <= lastSfx) continue
       lastSfx = e.id
       play(e.sfx)
     }
